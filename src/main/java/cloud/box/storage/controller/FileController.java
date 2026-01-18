@@ -6,18 +6,19 @@ import cloud.box.storage.model.User;
 import cloud.box.storage.repository.FileMetadataRepository;
 import cloud.box.storage.repository.UserRepository;
 import cloud.box.storage.service.FileStorageService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import java.io.*;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,90 +34,108 @@ public class FileController {
     @Autowired
     private UserRepository userRepository;
 
-    // -------------------- UPLOAD --------------------
+    // =============================
+    // UPLOAD FILES
+    // =============================
     @PostMapping("/upload")
     public ResponseEntity<List<String>> uploadMultiple(
-            @RequestParam("files") MultipartFile[] files, // must match the field name in request
+            @RequestParam("files") MultipartFile[] files,
             Authentication auth) throws IOException {
 
-        if (files.length == 0) {
-            return ResponseEntity.badRequest().body(List.of());
-        }
-        if (files.length > 10) {
-            return ResponseEntity.badRequest()
-                    .body(List.of("You can upload up to 10 files at a time"));
-        }
+        if (files == null || files.length == 0)
+            return ResponseEntity.badRequest().body(List.of("No files uploaded"));
+
+        if (files.length > 10)
+            return ResponseEntity.badRequest().body(List.of("Max 10 files allowed"));
 
         User user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        List<String> urls = new java.util.ArrayList<>();
+        List<String> urls = new ArrayList<>();
 
         for (MultipartFile file : files) {
-            storageService.saveFile(file, user.getUsername());
 
-            FileMetadata metadata = new FileMetadata(
-                    file.getOriginalFilename(),
-                    file.getOriginalFilename(),
-                    UUID.randomUUID().toString(),
+            // Generate unique filename
+            String uniqueFilename = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+
+            // Save file in /storage/{userId}/
+            storageService.saveFile(file, String.valueOf(user.getId()));
+
+            // Save metadata with the actual stored filename
+            String fileKey = UUID.randomUUID().toString();
+            FileMetadata meta = new FileMetadata(
+                    file.getOriginalFilename(),                  // original filename
+                    user.getId() + "/" + uniqueFilename,        // actual stored path
+                    fileKey,
                     LocalDateTime.now(),
                     user
             );
+            metadataRepository.save(meta);
 
-            metadataRepository.save(metadata);
+            Path fullPath = storageService.getFilePath(uniqueFilename, String.valueOf(user.getId()));
 
-            String streamingUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
+            String url = ServletUriComponentsBuilder
+                    .fromCurrentContextPath()
                     .path("/meta/")
-                    .path(metadata.getFileKey())
+                    .path(fileKey)
                     .toUriString();
 
-            urls.add(streamingUrl);
+            urls.add(url);
         }
 
         return ResponseEntity.ok(urls);
     }
 
-    // -------------------- PUBLIC STREAMING --------------------
+    // =============================
+    // STREAM FILE
+    // =============================
     @GetMapping("/meta/{fileKey}")
-    public void streamFile(@PathVariable String fileKey, HttpServletResponse response) throws IOException {
+    public void streamFile(@PathVariable String fileKey,
+                           HttpServletResponse response) throws IOException {
+
         FileMetadata meta = metadataRepository.findByFileKey(fileKey).orElse(null);
+
         if (meta == null) {
             response.setStatus(404);
             return;
         }
 
-        Path file = storageService.getFilePath(meta.getFilename(), meta.getUser().getUsername());
-        if (!Files.exists(file)) {
+        // Extract stored filename from relativePath
+        String[] pathParts = meta.getRelativePath().split("/", 2);
+        String storedFilename = pathParts[1]; // everything after userId/
+
+        Path filePath = storageService.getFilePath(storedFilename, pathParts[0]);
+
+        if (!Files.exists(filePath)) {
             response.setStatus(404);
             return;
         }
 
-        String mimeType = Files.probeContentType(file);
-        if (mimeType == null) mimeType = "application/octet-stream";
+        response.setContentType(
+                Files.probeContentType(filePath) != null
+                        ? Files.probeContentType(filePath)
+                        : "application/octet-stream"
+        );
 
-        response.setContentType(mimeType);
-        response.setHeader("Content-Disposition", "inline; filename=\"" + meta.getFilename() + "\"");
+        response.setHeader(
+                "Content-Disposition",
+                "inline; filename=\"" + meta.getFilename() + "\""
+        );
 
-        try (InputStream in = Files.newInputStream(file); OutputStream out = response.getOutputStream()) {
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = in.read(buffer)) != -1) out.write(buffer, 0, bytesRead);
-        }
+        Files.copy(filePath, response.getOutputStream());
     }
 
-
-
-    // -------------------- LIST FILES --------------------
+    // =============================
+    // LIST FILES
+    // =============================
     @GetMapping("/my-files")
     public List<FileDTO> listFiles(Authentication auth) {
+
         User user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Fetch files for this user
-        List<FileMetadata> files = metadataRepository.findByUser(user);
-
-        // Map to DTOs (exclude User info)
-        return files.stream()
+        return metadataRepository.findByUser(user)
+                .stream()
                 .map(f -> new FileDTO(
                         f.getFilename(),
                         f.getRelativePath(),
@@ -124,5 +143,41 @@ public class FileController {
                         f.getUploadedAt()
                 ))
                 .toList();
+    }
+
+    // =============================
+    // DELETE FILE
+    // =============================
+    @DeleteMapping("/delete/{fileKey}")
+    public ResponseEntity<String> deleteFile(
+            @PathVariable String fileKey,
+            Authentication auth) {
+
+        User user = userRepository.findByUsername(auth.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        FileMetadata meta = metadataRepository.findByFileKey(fileKey).orElse(null);
+
+        if (meta == null)
+            return ResponseEntity.status(404).body("File not found");
+
+        if (!meta.getUser().getId().equals(user.getId()))
+            return ResponseEntity.status(403).body("Unauthorized");
+
+        try {
+            // Extract stored filename from relativePath
+            String[] pathParts = meta.getRelativePath().split("/", 2);
+            String storedFilename = pathParts[1];
+
+            Path path = storageService.getFilePath(storedFilename, pathParts[0]);
+
+            Files.deleteIfExists(path);
+            metadataRepository.delete(meta);
+
+            return ResponseEntity.ok("File deleted");
+
+        } catch (IOException e) {
+            return ResponseEntity.status(500).body("Delete failed");
+        }
     }
 }
