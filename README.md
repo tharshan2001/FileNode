@@ -137,6 +137,7 @@ Metadata is required for streaming files correctly
 ## **Contact / Support**
 
 For any issues or feature requests, please contact the maintainer.
+Email: aptharshan@gmail.com
 
 
 
