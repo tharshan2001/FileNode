@@ -31,8 +31,9 @@ Users can **upload multiple files**, **list their files**, **stream/download**, 
 -  File metadata stored in the database  
 -  **Stream/download files** via `/meta/{fileKey}`  
 -  List user files with DTOs (hides sensitive info)  
--  Delete files **per user**  
+-  Delete files **authorized user**  
 -  JWT-based authentication  
+- Integrate via the SDK
 
 ---
 
