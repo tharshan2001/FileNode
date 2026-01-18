@@ -22,11 +22,12 @@ public class User {
     private String password;
     private String apiKey;
 
-    // One user can have many files
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<FileMetadata> files = new ArrayList<>();
 
-    public User() {}
+    public User() {
+        this.apiKey = UUID.randomUUID().toString(); // always generate
+    }
 
     public User(String username, String password) {
         this.username = username;
@@ -34,13 +35,18 @@ public class User {
         this.apiKey = UUID.randomUUID().toString();
     }
 
-    // Utility method to add a file
+    @PrePersist
+    public void prePersist() {
+        if (this.apiKey == null || this.apiKey.isEmpty()) {
+            this.apiKey = UUID.randomUUID().toString();
+        }
+    }
+
     public void addFile(FileMetadata file) {
         files.add(file);
         file.setUser(this);
     }
 
-    // Utility method to remove a file
     public void removeFile(FileMetadata file) {
         files.remove(file);
         file.setUser(null);

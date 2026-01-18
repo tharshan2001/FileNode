@@ -34,12 +34,28 @@ public class FileController {
     @Autowired
     private UserRepository userRepository;
 
+    // -----------------------------
+    // Utility: get user by JWT or API key
+    // -----------------------------
+    private User resolveUser(Authentication auth, String apiKey) {
+        if (apiKey != null) {
+            return userRepository.findByApiKey(apiKey)
+                    .orElseThrow(() -> new RuntimeException("Invalid API Key"));
+        }
+        if (auth != null) {
+            return userRepository.findByUsername(auth.getName())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+        }
+        throw new RuntimeException("No authentication provided");
+    }
+
     // =============================
     // UPLOAD FILES
     // =============================
     @PostMapping("/upload")
     public ResponseEntity<List<String>> uploadMultiple(
             @RequestParam("files") MultipartFile[] files,
+            @RequestParam(required = false) String apiKey,
             Authentication auth) throws IOException {
 
         if (files == null || files.length == 0)
@@ -48,9 +64,7 @@ public class FileController {
         if (files.length > 10)
             return ResponseEntity.badRequest().body(List.of("Max 10 files allowed"));
 
-        User user = userRepository.findByUsername(auth.getName())
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
+        User user = resolveUser(auth, apiKey);
         List<String> urls = new ArrayList<>();
 
         for (MultipartFile file : files) {
@@ -61,11 +75,11 @@ public class FileController {
             // Save file in /storage/{userId}/
             storageService.saveFile(file, String.valueOf(user.getId()));
 
-            // Save metadata with the actual stored filename
+            // Save metadata
             String fileKey = UUID.randomUUID().toString();
             FileMetadata meta = new FileMetadata(
-                    file.getOriginalFilename(),                  // original filename
-                    user.getId() + "/" + uniqueFilename,        // actual stored path
+                    file.getOriginalFilename(),
+                    user.getId() + "/" + uniqueFilename,
                     fileKey,
                     LocalDateTime.now(),
                     user
@@ -94,7 +108,6 @@ public class FileController {
                            HttpServletResponse response) throws IOException {
 
         FileMetadata meta = metadataRepository.findByFileKey(fileKey).orElse(null);
-
         if (meta == null) {
             response.setStatus(404);
             return;
@@ -103,7 +116,6 @@ public class FileController {
         // Extract stored filename from relativePath
         String[] pathParts = meta.getRelativePath().split("/", 2);
         String storedFilename = pathParts[1]; // everything after userId/
-
         Path filePath = storageService.getFilePath(storedFilename, pathParts[0]);
 
         if (!Files.exists(filePath)) {
@@ -129,10 +141,11 @@ public class FileController {
     // LIST FILES
     // =============================
     @GetMapping("/my-files")
-    public List<FileDTO> listFiles(Authentication auth) {
+    public List<FileDTO> listFiles(
+            @RequestParam(required = false) String apiKey,
+            Authentication auth) {
 
-        User user = userRepository.findByUsername(auth.getName())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = resolveUser(auth, apiKey);
 
         return metadataRepository.findByUser(user)
                 .stream()
@@ -151,11 +164,10 @@ public class FileController {
     @DeleteMapping("/delete/{fileKey}")
     public ResponseEntity<String> deleteFile(
             @PathVariable String fileKey,
+            @RequestParam(required = false) String apiKey,
             Authentication auth) {
 
-        User user = userRepository.findByUsername(auth.getName())
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
+        User user = resolveUser(auth, apiKey);
         FileMetadata meta = metadataRepository.findByFileKey(fileKey).orElse(null);
 
         if (meta == null)
@@ -165,12 +177,10 @@ public class FileController {
             return ResponseEntity.status(403).body("Unauthorized");
 
         try {
-            // Extract stored filename from relativePath
             String[] pathParts = meta.getRelativePath().split("/", 2);
             String storedFilename = pathParts[1];
 
             Path path = storageService.getFilePath(storedFilename, pathParts[0]);
-
             Files.deleteIfExists(path);
             metadataRepository.delete(meta);
 
