@@ -117,31 +117,33 @@ Streaming can be made private by enforcing JWT (currently public for testing)
 
 ## **Future Improvements**   
 
-File size and type validation
+- File size and type validation
 
-Pagination for file listing
+- Pagination for file listing
 
-Shareable public links
+- Shareable public links
 
-Search / filter files
+- Search / filter files
 
-Logging and analytics
+- Logging and analytics
 
-Integration tests
+- Integration tests
+
+- Add Clusters for more organizing (Boxes) 
 
 
 ## **Notes**   
 
 
-Maximum 10 files per upload
+- Maximum 10 files per upload
 
-Files are stored uniquely to prevent overwriting
-Metadata is required for streaming files correctly
+- Files are stored uniquely to prevent overwriting
+  Metadata is required for streaming files correctly
 
 ## **Contact / Support**
 
-For any issues or feature requests, please contact the maintainer.
-Email: aptharshan@gmail.com
+- For any issues or feature requests, please contact the maintainer.
+ Email: aptharshan@gmail.com
 
 
 
