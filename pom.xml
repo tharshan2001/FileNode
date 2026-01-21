@@ -14,9 +14,9 @@
 	</parent>
 
 	<groupId>cloud.box</groupId>
-	<artifactId>CloudBox</artifactId>
+	<artifactId>FileNode</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>CloudBox</name>
+	<name>FileNode</name>
 	<description>Central storage hub</description>
 
 	<properties>
@@ -56,6 +56,7 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-configuration-processor</artifactId>
+			<version>3.3.3</version>
 			<optional>true</optional>
 		</dependency>
 
@@ -132,6 +133,7 @@
 						<path>
 							<groupId>org.springframework.boot</groupId>
 							<artifactId>spring-boot-configuration-processor</artifactId>
+							<version>3.3.3</version>
 						</path>
 					</annotationProcessorPaths>
 				</configuration>

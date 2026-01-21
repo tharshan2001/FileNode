@@ -1,0 +1,12 @@
+package File.Node.storage.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
+@AllArgsConstructor
+public class ApiKeyRes {
+    private String apiKey;
+}

@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: filenode-db
+    environment:
+      POSTGRES_USER: filenode
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: filenode
+    ports:
+      - "5432:5432"
+    volumes:
+      - filenode-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  app:
+    image: filenode:latest
+    container_name: filenode-app
+    depends_on:
+      - db
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/filenode
+      SPRING_DATASOURCE_USERNAME: filenode
+      SPRING_DATASOURCE_PASSWORD: secret
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    restart: unless-stopped
+
+volumes:
+  filenode-data:
