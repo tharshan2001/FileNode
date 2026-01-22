@@ -10,7 +10,7 @@ public class WebOptimizedConverterFactory {
 
     public WebOptimizedConverterFactory() {
         // Register converters
-        registry.put("image", new ImageWebConverter("webp", 0.95f));
+        registry.put("image", new ImageWebConverter("webp", 1.0f));
         registry.put("video", new VideoWebConverter("webm", 20));
         registry.put("audio", new AudioWebConverter());
         registry.put("document", new DocumentWebConverter());

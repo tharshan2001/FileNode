@@ -6,6 +6,9 @@ import File.Node.storage.model.User;
 import File.Node.storage.repository.FileMetadataRepository;
 import File.Node.storage.repository.UserRepository;
 import File.Node.storage.service.FileStorageService;
+import File.Node.storage.utils.WebOptimizedConverter;
+import File.Node.storage.utils.WebOptimizedConverterFactory;
+import File.Node.storage.utils.ImageWebConverter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -14,13 +17,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @RestController
 public class FileController {
@@ -34,6 +36,14 @@ public class FileController {
     @Autowired
     private UserRepository userRepository;
 
+    // Factory for web-optimized converters
+    private final WebOptimizedConverterFactory converterFactory = new WebOptimizedConverterFactory();
+
+    public FileController() {
+        // Override image converter to use pure Java PNG conversion
+        converterFactory.registerConverter("image", new ImageWebConverter("png", 1.0f));
+    }
+
     // =============================
     // Resolve user by API key or Authentication
     // =============================
@@ -43,7 +53,6 @@ public class FileController {
                     .orElseThrow(() -> new RuntimeException("Invalid API Key"));
         }
         if (auth != null) {
-            // Use email instead of username
             return userRepository.findByEmail(auth.getName())
                     .orElseThrow(() -> new RuntimeException("User not found"));
         }
@@ -51,7 +60,7 @@ public class FileController {
     }
 
     // =============================
-    // UPLOAD FILES
+    // UPLOAD FILES WITH PRE-CONVERSION
     // =============================
     @PostMapping("/upload")
     public ResponseEntity<List<String>> uploadMultiple(
@@ -69,29 +78,58 @@ public class FileController {
         List<String> urls = new ArrayList<>();
 
         for (MultipartFile file : files) {
-            // Generate a unique filename
-            String uniqueFilename = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+            String originalName = file.getOriginalFilename();
+            String baseFilename = System.currentTimeMillis() + "_" + originalName;
 
-            // Save file
-            storageService.saveFile(file, String.valueOf(user.getId()), uniqueFilename);
+            // 1️⃣ Get converter for MIME type
+            Optional<WebOptimizedConverter> optionalConverter =
+                    converterFactory.getConverter(file.getContentType());
 
-            // Save metadata
+            if (optionalConverter.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(List.of("Unsupported file type: " + file.getContentType()));
+            }
+
+            WebOptimizedConverter converter = optionalConverter.get();
+            String targetExtension = converter.getTargetExtension();
+
+            // 2️⃣ Generate unique filename and prevent overwrite
+            String convertedFilename = baseFilename + "." + targetExtension;
+            Path convertedPath = storageService.getFilePath(String.valueOf(user.getId()), convertedFilename);
+            while (Files.exists(convertedPath)) {
+                convertedFilename = System.currentTimeMillis() + "_" + originalName + "." + targetExtension;
+                convertedPath = storageService.getFilePath(String.valueOf(user.getId()), convertedFilename);
+            }
+
+            // 3️⃣ Convert file BEFORE saving
+            try {
+                File tempFile = File.createTempFile("upload-", null);
+                file.transferTo(tempFile); // save MultipartFile to temp
+                converter.convert(tempFile, convertedPath.toFile());
+                tempFile.delete(); // cleanup temp
+            } catch (Exception e) {
+                e.printStackTrace();
+                return ResponseEntity.status(500)
+                        .body(List.of("Conversion failed for file: " + originalName));
+            }
+
+            // 4️⃣ Save metadata for optimized file
             String fileKey = UUID.randomUUID().toString();
             FileMetadata meta = new FileMetadata(
-                    file.getOriginalFilename(),
-                    user.getId() + "/" + uniqueFilename,
+                    originalName,
+                    user.getId() + "/" + convertedFilename,
                     fileKey,
                     LocalDateTime.now(),
                     user
             );
             metadataRepository.save(meta);
 
+            // 5️⃣ Generate public URL
             String url = ServletUriComponentsBuilder
                     .fromCurrentContextPath()
                     .path("/meta/")
                     .path(fileKey)
                     .toUriString();
-
             urls.add(url);
         }
 

@@ -106,6 +106,22 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Source: https://mvnrepository.com/artifact/org.sejda.webp-imageio/webp-imageio-sejda -->
+		<dependency>
+			<groupId>org.sejda.webp-imageio</groupId>
+			<artifactId>webp-imageio-sejda</artifactId>
+			<version>0.1.0</version>
+			<scope>compile</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>com.twelvemonkeys.imageio</groupId>
+			<artifactId>imageio-jpeg</artifactId>
+			<version>3.13.0</version>
+			<scope>compile</scope>
+		</dependency>
+
+
 		<!-- Spring Boot Test -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
