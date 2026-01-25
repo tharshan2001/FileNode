@@ -14,15 +14,29 @@ public class UserResolverService {
         this.userRepository = userRepository;
     }
 
+    /**
+     * Resolves a User entity from either a JWT-provided Authentication or an API key.
+     *
+     * @param auth   the Spring Security Authentication object (from JWT)
+     * @param apiKey optional API key (can be null)
+     * @return User entity
+     * @throws RuntimeException if no valid user is found
+     */
     public User resolveUser(Authentication auth, String apiKey) {
-        if (apiKey != null) {
+
+        // First, try API key if provided
+        if (apiKey != null && !apiKey.isBlank()) {
             return userRepository.findByApiKey(apiKey)
-                    .orElseThrow(() -> new RuntimeException("Invalid API Key"));
+                    .orElseThrow(() -> new RuntimeException("Invalid API key"));
         }
-        if (auth != null) {
+
+        // Then try authentication
+        if (auth != null && auth.isAuthenticated() && auth.getName() != null) {
             return userRepository.findByEmail(auth.getName())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(() -> new RuntimeException("User not found for email: " + auth.getName()));
         }
-        throw new RuntimeException("No authentication provided");
+
+        // Neither API key nor authentication worked
+        throw new RuntimeException("Authentication required");
     }
 }

@@ -1,47 +1,84 @@
 package File.Node.utils.FileConvertor;
 
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Iterator;
 
+/**
+ * Converts images to web-optimized format with optional width, height, and quality.
+ */
 public class ImageWebConverter implements WebOptimizedConverter {
 
-    private final String targetFormat; // jpg
-    private final float quality; // 0.0 - 1.0
+    private final String targetFormat; // jpg, webp, png
 
-    public ImageWebConverter(String targetFormat, float quality) {
+    public ImageWebConverter(String targetFormat) {
         this.targetFormat = targetFormat;
-        this.quality = quality;
     }
 
     @Override
     public void convert(File inputFile, File outputFile) throws IOException {
-        BufferedImage original = ImageIO.read(inputFile);
-        if (original == null) {
-            throw new IOException("Unsupported image format or corrupted file");
-        }
+        // default: keep original size, 85% quality
+        convert(inputFile, outputFile, null, null, 85);
+    }
 
-        // ✅ Normalize to RGB
-        BufferedImage rgbImage = new BufferedImage(
-                original.getWidth(),
-                original.getHeight(),
-                BufferedImage.TYPE_INT_RGB
-        );
-        Graphics2D g = rgbImage.createGraphics();
-        g.setColor(Color.WHITE); // fill background for images with alpha
-        g.fillRect(0, 0, rgbImage.getWidth(), rgbImage.getHeight());
-        g.drawImage(original, 0, 0, null);
+    @Override
+    public void convert(File inputFile, File outputFile,
+                        Integer width, Integer height, Integer qualityPercent)
+            throws IOException {
+
+        BufferedImage original = ImageIO.read(inputFile);
+        if (original == null) throw new IOException("Unsupported image format");
+
+        // Determine target width/height
+        int targetWidth = (width != null) ? width : original.getWidth();
+        int targetHeight = (height != null) ? height : original.getHeight();
+
+        // Maintain aspect ratio if only width or height is provided
+        double aspect = (double) original.getWidth() / original.getHeight();
+        if (width != null && height == null) targetHeight = (int) (targetWidth / aspect);
+        if (height != null && width == null) targetWidth = (int) (targetHeight * aspect);
+
+        // Resize image
+        BufferedImage resized = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = resized.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, targetWidth, targetHeight);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.drawImage(original, 0, 0, targetWidth, targetHeight, null);
         g.dispose();
 
-        // Write as JPEG with high quality
-        javax.imageio.plugins.jpeg.JPEGImageWriteParam jpegParams =
-                new javax.imageio.plugins.jpeg.JPEGImageWriteParam(null);
-        jpegParams.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);
-        jpegParams.setCompressionQuality(quality); // e.g., 0.95f
+        // Determine quality
+        float q = (qualityPercent != null) ? qualityPercent / 100f : 0.85f;
+        if (q < 0f) q = 0f;
+        if (q > 1f) q = 1f;
 
-        ImageIO.write(rgbImage, targetFormat, outputFile);
+        // Write image
+        try (FileOutputStream fos = new FileOutputStream(outputFile);
+             ImageOutputStream ios = ImageIO.createImageOutputStream(fos)) {
+
+            Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName(targetFormat);
+            if (!writers.hasNext()) throw new IOException("No writer for format " + targetFormat);
+
+            ImageWriter writer = writers.next();
+            writer.setOutput(ios);
+
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            if (param.canWriteCompressed()) {
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                param.setCompressionQuality(q);
+            }
+
+            writer.write(null, new IIOImage(resized, null, null), param);
+            writer.dispose();
+        }
     }
 
     @Override

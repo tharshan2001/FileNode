@@ -32,7 +32,7 @@ public class CubeWrapper {
     public String getApiKey() { return cube.getApiKey(); }
     public String getApiSecret() { return cube.getApiSecret(); }
 
-    public List<String> add(MultipartFile[] files) throws IOException {
+    public List<String> add(MultipartFile[] files) throws IOException, InterruptedException {
         return uploadService.saveFiles(cube, owner, files);
     }
 
