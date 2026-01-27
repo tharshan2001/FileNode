@@ -26,8 +26,8 @@ public class FileNodeSDK {
     private final String apiKey;
     private final String apiSecret;
     private final ObjectMapper objectMapper = new ObjectMapper()
-            .registerModule(new JavaTimeModule())       // <-- enable Java 8 date/time support
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false); // optional
+            .registerModule(new JavaTimeModule())
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     public FileNodeSDK(String baseUrl, String username, String apiKey, String apiSecret) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";

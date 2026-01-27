@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/files")
 public class FileController {
 
     private final CubeService cubeService;
@@ -43,7 +42,7 @@ public class FileController {
     // UPLOAD SINGLE FILE
     // ============================
     @PostMapping(
-            value = "/{cubeName}",
+            value = "/api/files/{cubeName}",
             consumes = "multipart/form-data"
     )
     public ResponseEntity<ResponseWrapper<String>> uploadFile(
@@ -84,7 +83,7 @@ public class FileController {
     // ============================
     // LIST FILES
     // ============================
-    @GetMapping("/{cubeName}")
+    @GetMapping("/api/files/{cubeName}")
     public ResponseEntity<List<FileDTO>> listFiles(
             @PathVariable String cubeName,
             @CurrentUser User user
