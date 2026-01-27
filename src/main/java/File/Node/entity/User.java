@@ -21,7 +21,7 @@ public class User implements UserDetails {
     private Long id;
 
     @Column(unique = true, nullable = false)
-    private String username;
+    private String username; // login via username
 
     private String name;
 
@@ -72,7 +72,7 @@ public class User implements UserDetails {
 
     @Override
     public String getUsername() {
-        return email; // principal = email
+        return username; // FIXED: return username for authentication
     }
 
     @Override

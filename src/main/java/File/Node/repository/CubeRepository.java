@@ -33,4 +33,7 @@ public interface CubeRepository extends JpaRepository<Cube, Long> {
     Optional<Cube> findByNameAndUser(@Param("name") String name, @Param("owner") User owner);
 
     boolean existsByNameAndOwner(String name, User owner);
+
+    Optional<Cube> findByApiKeyAndApiSecretAndOwner_Id(String apiKey, String apiSecret, Long ownerId);
+
 }
